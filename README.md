@@ -1,36 +1,318 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 💰 班费小管家
 
-## Getting Started
+> 我的第一个 Vibe Coding 全栈项目：一个面向班级场景的轻量级班费管理系统。
 
-First, run the development server:
+班费小管家是一个基于 **Next.js + Supabase** 开发的班费收缴与管理网站。
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+项目围绕真实的班级班费管理场景设计，学生可以注册并查看自己的班费缴纳情况，通过微信或支付宝二维码完成转账后提交缴费申请；管理员可以审核学生、发布收费项目、确认缴费，并查看班级缴费情况和班费流水。
+
+这个项目也是我第一次尝试使用 **Vibe Coding** 的方式，从需求分析开始，一步步完成数据库设计、前后端开发、权限控制、安全加固、测试和部署。
+
+---
+
+## ✨ 核心功能
+
+### 👨‍🎓 学生端
+
+- 通过真实姓名、邮箱、密码和班级邀请码注册
+- 注册后等待管理员审核
+- 登录后查看班费总额和缴费状态
+- 查看班级当前收费项目
+- 通过微信 / 支付宝收款二维码完成转账
+- 提交“我已完成转账”申请
+- 查看待确认、已确认、未通过等缴费状态
+- 缴费被拒绝后可以重新提交
+- 查看个人历史缴费记录
+
+### 👨‍💼 管理员端
+
+- 审核新注册学生
+- 通过或拒绝学生加入班级
+- 发布新的收费项目
+- 设置收费金额、说明和截止日期
+- 查看学生缴费情况
+- 查看待确认的缴费申请
+- 确认或拒绝学生缴费
+- 查看班级缴费统计
+- 查看班费流水以及提交、确认时间
+
+---
+
+## 🛠 技术栈
+
+| 技术 | 用途 |
+| --- | --- |
+| Next.js | 全栈 Web 应用框架 |
+| React | 前端界面 |
+| TypeScript | 类型安全 |
+| Tailwind CSS | 页面样式 |
+| Supabase Auth | 用户注册与登录 |
+| Supabase PostgreSQL | 数据存储 |
+| Supabase RLS | 数据库权限控制 |
+| Supabase Storage | 微信 / 支付宝收款码存储 |
+| Git / GitHub | 代码版本管理 |
+| Vercel | Web 应用部署 |
+
+---
+
+## 🏗 系统结构
+
+```text
+用户浏览器
+    │
+    ▼
+Next.js
+├── 学生端
+├── 管理员端
+└── Server API
+        │
+        ▼
+     Supabase
+     ├── Auth
+     ├── PostgreSQL
+     ├── Row Level Security
+     └── Storage
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+项目主要包含三类核心数据：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+profiles
+    │
+    ├── 学生 / 管理员身份
+    └── 审核状态
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+fee_items
+    │
+    └── 班费收费项目
 
-## Learn More
+payments
+    │
+    ├── 学生
+    ├── 收费项目
+    └── pending / paid / rejected
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 💳 缴费流程
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+本项目没有直接接入微信支付或支付宝支付 API，而是采用更适合班级小规模使用场景的人工确认方式。
 
-## Deploy on Vercel
+```text
+管理员发布收费项目
+        ↓
+学生查看待缴班费
+        ↓
+选择微信 / 支付宝收款码
+        ↓
+学生自行完成转账
+        ↓
+点击“我已完成转账”
+        ↓
+缴费状态变为 pending
+        ↓
+管理员核对实际收款
+        ↓
+   ┌────┴────┐
+   ↓         ↓
+确认缴费     拒绝缴费
+   ↓         ↓
+ paid     rejected
+             ↓
+         学生重新提交
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+这样既避免了个人项目直接接入真实支付接口的复杂度，也保留了完整的班费确认流程。
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 🔐 权限与安全设计
+
+项目没有只依赖前端页面隐藏来区分权限，而是同时使用 Supabase Row Level Security（RLS）进行数据库层权限控制。
+
+例如：
+
+- 学生只能查看自己的个人资料和缴费记录
+- 学生不能把自己的缴费状态修改成 `paid`
+- 管理员可以查看全部学生和缴费记录
+- 只有管理员可以确认或拒绝缴费
+- 只有审核通过的用户可以读取收款二维码
+- 学生无法把自己修改成管理员
+
+### 邀请码注册
+
+班级邀请码保存在服务器环境变量中：
+
+```text
+CLASS_INVITE_CODE
+```
+
+注册请求由 Next.js Server API 处理：
+
+```text
+注册表单
+   ↓
+/api/register
+   ↓
+服务器验证邀请码
+   ↓
+Supabase Admin API 创建用户
+   ↓
+创建 pending 学生资料
+   ↓
+等待管理员审核
+```
+
+Supabase 的公开注册入口被关闭，因此不能通过绕过网站注册页面的方式跳过邀请码验证。
+
+### Secret 管理
+
+敏感信息只保存在环境变量中，例如：
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+CLASS_INVITE_CODE
+SUPABASE_SECRET_KEY
+```
+
+`.env.local` 已通过 `.gitignore` 排除，不提交到 GitHub。
+
+---
+
+## 📱 页面
+
+目前主要页面包括：
+
+```text
+/               首页
+/register       学生注册
+/login          用户登录
+/pending        等待管理员审核
+/dashboard      学生班费中心
+/admin          管理员后台
+/api/register   服务器注册接口
+```
+
+---
+
+## 📸 项目截图
+
+> 项目上线后补充实际运行截图。
+
+计划展示：
+
+- 学生班费首页
+- 扫码缴费界面
+- 学生缴费记录
+- 管理员后台
+- 班级缴费情况
+- 班费流水
+
+---
+
+## 🚀 在线体验
+
+项目正在部署中。
+
+部署完成后将在这里添加在线体验地址：
+
+```text
+https://xxxx.vercel.app
+```
+
+---
+
+## 🤖 关于 Vibe Coding
+
+这是我的第一个 Vibe Coding 项目。
+
+在开发过程中，我使用 AI 辅助完成了：
+
+- 需求拆解
+- 技术栈选择
+- 数据库结构设计
+- Next.js 页面开发
+- Supabase Auth 接入
+- RLS 权限策略设计
+- Server API 注册流程
+- Bug 排查与调试
+- Git / GitHub 版本管理
+- 安全检查
+- 部署流程
+
+但项目并不是简单地“一次生成”。
+
+整个开发过程采用：
+
+```text
+明确需求
+   ↓
+拆分功能
+   ↓
+理解实现原理
+   ↓
+编写 / 修改代码
+   ↓
+本地测试
+   ↓
+发现问题
+   ↓
+分析错误
+   ↓
+修复
+   ↓
+再次测试
+```
+
+通过这个项目，我第一次完整经历了一个 Web 应用从需求到可运行产品的开发过程，也逐步理解了前端、后端、数据库、身份认证、权限控制、Git 和部署之间是如何协同工作的。
+
+---
+
+## 📚 项目收获
+
+通过这个项目，我实践并理解了：
+
+- Next.js App Router 的基本项目结构
+- React Client Component 的使用
+- TypeScript 在实际项目中的作用
+- 前端与 Server API 的职责边界
+- Supabase Auth 用户认证
+- PostgreSQL 表之间的关系
+- Row Level Security 的基本安全模型
+- 为什么不能只依赖前端进行权限控制
+- Server Secret 与 Public Key 的区别
+- Git 的 `add → commit → push` 工作流
+- 从本地开发环境到生产环境部署的基本流程
+
+---
+
+## 📌 项目状态
+
+当前核心 MVP 已完成：
+
+- [x] 学生注册
+- [x] 班级邀请码
+- [x] 登录认证
+- [x] 管理员审核
+- [x] 收费项目发布
+- [x] 学生扫码缴费
+- [x] 缴费提交
+- [x] 管理员确认 / 拒绝
+- [x] 拒绝后重新提交
+- [x] 学生缴费历史
+- [x] 班级缴费统计
+- [x] 班费流水
+- [x] RLS 权限控制
+- [x] 注册安全加固
+- [x] Production Build 测试
+- [ ] 正式部署
+- [ ] 项目截图
+- [ ] 移动端实机测试
+
+---
+
+## 📝 License
+
+本项目目前主要用于个人学习、Vibe Coding 实践与作品展示。
